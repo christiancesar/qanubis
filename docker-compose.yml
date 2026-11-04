@@ -1,0 +1,32 @@
+services:
+  app:
+    build: ./docker
+    ports:
+      - "8090:80"
+    environment:
+      APACHE_RUN_USER: "#${UID:-1000}"
+      APACHE_RUN_GROUP: "#${GID:-1000}"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:10.6
+    environment:
+      MARIADB_DATABASE: qanubis
+      MARIADB_USER: qanubis
+      MARIADB_PASSWORD: qanubis
+      MARIADB_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - qanubis-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 20
+
+volumes:
+  qanubis-db:
