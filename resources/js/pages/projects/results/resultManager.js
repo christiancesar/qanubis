@@ -583,7 +583,10 @@ export default class ResultManager {
                     self.reportGraphManager.generateCodesWordCloud(data),
                     self.reportTableManager.generateDocumentsTable(data),
                     self.reportTableManager.generateCodesTable(data),
-                    self.reportGraphManager.generateTreeMap(data)
+                    self.reportGraphManager.generateTreeMap(data),
+                    self.reportGraphManager.generateQuotesPerCode(data),
+                    self.reportGraphManager.generateCodesPerDocument(data),
+                    self.reportGraphManager.generateChordDiagram(data),
                 ]).then(() => {
                     UtilsHelper.hideLoadingOverlay();
                 });

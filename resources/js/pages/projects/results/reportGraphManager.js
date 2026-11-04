@@ -136,23 +136,22 @@ export default class ReportGraphManager {
             chart.hiddenState.properties.opacity = 0;
             chart.maskBullets = false;
 
-            let cellSize = 10;
+            let cellSize = 35;
             chart.events.on("datavalidated", function (ev) {
                 let chart = ev.target;
                 let yCategoryAxis = chart.yAxes.getIndex(0);
                 let xCategoryAxis = chart.xAxes.getIndex(0);
 
-                // Calculate how we need to adjust chart dimensions
-                let adjustHeight = chart.data.length * cellSize - yCategoryAxis.pixelHeight;
-                let adjustWidth = chart.data.length * cellSize - xCategoryAxis.pixelHeight;
+                let uniqueY = [...new Set(chart.data.map(d => d.y))].length;
+                let uniqueX = [...new Set(chart.data.map(d => d.x))].length;
 
-                // get current chart dimensions
+                let adjustHeight = uniqueY * cellSize - yCategoryAxis.pixelHeight;
+                let adjustWidth = uniqueX * cellSize - xCategoryAxis.pixelWidth;
+
                 let targetHeight = chart.pixelHeight + adjustHeight;
-                let targetWidth = chart.pixelHeight + adjustWidth;
+                let targetWidth = chart.pixelWidth + adjustWidth;
 
-                if (targetHeight < 500) {
-                    targetHeight = 500;
-                }
+                if (targetHeight < 500) targetHeight = 500;
 
                 chart.svgContainer.htmlElement.style.height = targetHeight + "px";
 
@@ -167,6 +166,8 @@ export default class ReportGraphManager {
             xAxis.dataFields.category = "x";
             xAxis.renderer.grid.template.disabled = true;
             xAxis.renderer.minGridDistance = 40;
+            xAxis.renderer.labels.template.rotation = -45;
+            xAxis.renderer.labels.template.horizontalCenter = "right";
 
             let yAxis = chart.yAxes.push(new am4charts.CategoryAxis());
             yAxis.title.text = 'Codes';
@@ -299,23 +300,22 @@ export default class ReportGraphManager {
             chart.hiddenState.properties.opacity = 0;
             chart.maskBullets = false;
 
-            let cellSize = 10;
+            let cellSize = 35;
             chart.events.on("datavalidated", function (ev) {
                 let chart = ev.target;
                 let yCategoryAxis = chart.yAxes.getIndex(0);
                 let xCategoryAxis = chart.xAxes.getIndex(0);
 
-                // Calculate how we need to adjust chart dimensions
-                let adjustHeight = chart.data.length * cellSize - yCategoryAxis.pixelHeight;
-                let adjustWidth = chart.data.length * cellSize - xCategoryAxis.pixelHeight;
+                let uniqueY = [...new Set(chart.data.map(d => d.y))].length;
+                let uniqueX = [...new Set(chart.data.map(d => d.x))].length;
 
-                // get current chart dimensions
+                let adjustHeight = uniqueY * cellSize - yCategoryAxis.pixelHeight;
+                let adjustWidth = uniqueX * cellSize - xCategoryAxis.pixelWidth;
+
                 let targetHeight = chart.pixelHeight + adjustHeight;
-                let targetWidth = chart.pixelHeight + adjustWidth;
+                let targetWidth = chart.pixelWidth + adjustWidth;
 
-                if (targetHeight < 500) {
-                    targetHeight = 500;
-                }
+                if (targetHeight < 500) targetHeight = 500;
 
                 chart.svgContainer.htmlElement.style.height = targetHeight + "px";
 
@@ -330,6 +330,8 @@ export default class ReportGraphManager {
             xAxis.dataFields.category = "x";
             xAxis.renderer.grid.template.disabled = true;
             xAxis.renderer.minGridDistance = 40;
+            xAxis.renderer.labels.template.rotation = -45;
+            xAxis.renderer.labels.template.horizontalCenter = "right";
 
             let yAxis = chart.yAxes.push(new am4charts.CategoryAxis());
             yAxis.title.text = 'Documents';
@@ -415,6 +417,218 @@ export default class ReportGraphManager {
             chart.events.on('ready', () => {
                 resolve(true);
             });
+        });
+    }
+
+    async generateQuotesPerCode(data) {
+        let self = this;
+        let container = $('#results-index-page').find('.quotes-per-code-chart');
+
+        return new Promise((resolve) => {
+            if (isset(self.charts) && self.charts.get('quotesPerCode') && !self.charts.get('quotesPerCode').isDisposed()) {
+                self.charts.get('quotesPerCode').dispose();
+            }
+
+            let chartData = [...data.codes.values()]
+                .filter(c => c.relatedQuotes.length > 0)
+                .map(c => ({ code: c.code.name, count: c.relatedQuotes.length, color: c.code.color || '#607d8b', codeObj: c.code }))
+                .sort((a, b) => b.count - a.count);
+
+            let chart = am4core.create(container[0], am4charts.XYChart);
+            self.charts.set('quotesPerCode', chart);
+
+            chart.exporting.menu = new am4core.ExportMenu();
+            chart.hiddenState.properties.opacity = 0;
+
+            let cellSize = 35;
+            chart.events.on("datavalidated", function (ev) {
+                let c = ev.target;
+                let categoryAxis = c.yAxes.getIndex(0);
+                let adjustHeight = c.data.length * cellSize - categoryAxis.pixelHeight;
+                let targetHeight = c.pixelHeight + adjustHeight;
+                if (targetHeight < 300) targetHeight = 300;
+                c.svgContainer.htmlElement.style.height = targetHeight + "px";
+            });
+
+            let categoryAxis = chart.yAxes.push(new am4charts.CategoryAxis());
+            categoryAxis.dataFields.category = "code";
+            categoryAxis.renderer.inversed = true;
+            categoryAxis.renderer.grid.template.disabled = true;
+            categoryAxis.renderer.minGridDistance = 10;
+
+            let valueAxis = chart.xAxes.push(new am4charts.ValueAxis());
+            valueAxis.min = 0;
+            valueAxis.maxPrecision = 0;
+            valueAxis.title.text = "Quotes";
+
+            let series = chart.series.push(new am4charts.ColumnSeries());
+            series.dataFields.valueX = "count";
+            series.dataFields.categoryY = "code";
+            series.columns.template.height = am4core.percent(80);
+            series.columns.template.propertyFields.fill = "color";
+            series.columns.template.propertyFields.stroke = "color";
+            series.columns.template.tooltipText = "{code}: {valueX} quotes";
+            series.columns.template.cursorOverStyle = am4core.MouseCursorStyle.pointer;
+
+            series.columns.template.events.on("hit", function (ev) {
+                let item = ev.target.dataItem.dataContext;
+                self.resultManager.showQuotesModal([item.codeObj], []);
+            });
+
+            let labelBullet = series.bullets.push(new am4charts.LabelBullet());
+            labelBullet.label.text = "{valueX}";
+            labelBullet.label.dx = 5;
+            labelBullet.label.horizontalCenter = "left";
+
+            chart.data = chartData;
+            chart.events.on('ready', () => resolve(true));
+        });
+    }
+
+    async generateCodesPerDocument(data) {
+        let self = this;
+        let container = $('#results-index-page').find('.codes-per-doc-chart');
+
+        return new Promise((resolve) => {
+            if (isset(self.charts) && self.charts.get('codesPerDoc') && !self.charts.get('codesPerDoc').isDisposed()) {
+                self.charts.get('codesPerDoc').dispose();
+            }
+
+            let activeCodes = [...data.codes.values()].filter(c => c.relatedQuotes.length > 0);
+            if (activeCodes.length === 0 || data.documents.size === 0) {
+                resolve(true);
+                return;
+            }
+
+            let chartData = [...data.documents.values()].map(documentData => {
+                let entry = { document: documentData.document.name.length > 28 ? documentData.document.name.slice(0, 28) + '...' : documentData.document.name };
+                activeCodes.forEach(codeData => {
+                    let fieldName = `code_${codeData.code.id}`;
+                    entry[fieldName] = documentData.quotesPerRelatedCode.has(codeData.code.id)
+                        ? documentData.quotesPerRelatedCode.get(codeData.code.id)
+                        : 0;
+                });
+                return entry;
+            }).sort((a, b) => {
+                let sumA = activeCodes.reduce((s, c) => s + (a[`code_${c.code.id}`] || 0), 0);
+                let sumB = activeCodes.reduce((s, c) => s + (b[`code_${c.code.id}`] || 0), 0);
+                return sumB - sumA;
+            });
+
+            let chart = am4core.create(container[0], am4charts.XYChart);
+            self.charts.set('codesPerDoc', chart);
+
+            chart.exporting.menu = new am4core.ExportMenu();
+            chart.hiddenState.properties.opacity = 0;
+
+            let cellSize = 40;
+            chart.events.on("datavalidated", function (ev) {
+                let c = ev.target;
+                let categoryAxis = c.yAxes.getIndex(0);
+                let adjustHeight = c.data.length * cellSize - categoryAxis.pixelHeight;
+                let targetHeight = c.pixelHeight + adjustHeight;
+                if (targetHeight < 300) targetHeight = 300;
+                c.svgContainer.htmlElement.style.height = targetHeight + "px";
+            });
+
+            let categoryAxis = chart.yAxes.push(new am4charts.CategoryAxis());
+            categoryAxis.dataFields.category = "document";
+            categoryAxis.renderer.inversed = true;
+            categoryAxis.renderer.grid.template.disabled = true;
+            categoryAxis.renderer.minGridDistance = 10;
+
+            let valueAxis = chart.xAxes.push(new am4charts.ValueAxis());
+            valueAxis.min = 0;
+            valueAxis.maxPrecision = 0;
+            valueAxis.title.text = "Quotes";
+
+            activeCodes.forEach(codeData => {
+                let series = chart.series.push(new am4charts.ColumnSeries());
+                let fieldName = `code_${codeData.code.id}`;
+                series.dataFields.valueX = fieldName;
+                series.dataFields.categoryY = "document";
+                series.name = codeData.code.name;
+                series.stacked = true;
+                series.columns.template.height = am4core.percent(80);
+                series.columns.template.fill = am4core.color(codeData.code.color || '#607d8b');
+                series.columns.template.stroke = am4core.color(codeData.code.color || '#607d8b');
+                series.columns.template.tooltipText = codeData.code.name + ": {valueX}";
+            });
+
+            chart.legend = new am4charts.Legend();
+            chart.legend.position = "bottom";
+            chart.legend.maxHeight = 150;
+            chart.legend.scrollable = true;
+            chart.legend.labels.template.maxWidth = 180;
+            chart.legend.labels.template.truncate = true;
+
+            chart.data = chartData;
+            chart.events.on('ready', () => resolve(true));
+        });
+    }
+
+    async generateChordDiagram(data) {
+        let self = this;
+        let container = $('#results-index-page').find('.chord-diagram');
+
+        return new Promise((resolve) => {
+            if (isset(self.charts) && self.charts.get('chordDiagram') && !self.charts.get('chordDiagram').isDisposed()) {
+                self.charts.get('chordDiagram').dispose();
+            }
+
+            let codeRelations = {};
+            data.quotes.forEach(quote => {
+                if (quote.codes.length <= 1) return;
+                quote.codes.forEach(code1 => {
+                    quote.codes.forEach(code2 => {
+                        if (code1.id >= code2.id) return;
+                        let key = `${code1.id}-${code2.id}`;
+                        if (!codeRelations[key]) {
+                            codeRelations[key] = { from: code1.name, to: code2.name, value: 0 };
+                        }
+                        codeRelations[key].value++;
+                    });
+                });
+            });
+
+            let chartData = Object.values(codeRelations).filter(r => r.value > 0);
+
+            if (chartData.length === 0) {
+                container.html('<p class="text-muted mt-3">Nenhuma co-ocorrencia encontrada entre codes.</p>');
+                resolve(true);
+                return;
+            }
+
+            let chart = am4core.create(container[0], am4charts.ChordDiagram);
+            self.charts.set('chordDiagram', chart);
+
+            chart.exporting.menu = new am4core.ExportMenu();
+            chart.hiddenState.properties.opacity = 0;
+            chart.padding(30, 30, 30, 30);
+
+            chart.dataFields.fromName = "from";
+            chart.dataFields.toName = "to";
+            chart.dataFields.value = "value";
+
+            chart.nodes.template.tooltipText = "{name}: {value.sum} co-ocorrencias";
+            chart.nodes.template.label.text = "{name}";
+            chart.nodes.template.label.wrap = false;
+            chart.nodes.template.label.maxWidth = 160;
+
+            chart.links.template.tooltipText = "{fromName} + {toName}: {value}";
+            chart.links.template.cursorOverStyle = am4core.MouseCursorStyle.pointer;
+
+            chart.links.template.events.on("hit", function (ev) {
+                let link = ev.target.dataItem;
+                let fromCode = [...data.codes.values()].find(c => c.code.name === link.fromName);
+                let toCode = [...data.codes.values()].find(c => c.code.name === link.toName);
+                if (fromCode && toCode) {
+                    self.resultManager.showQuotesModal([fromCode.code, toCode.code], []);
+                }
+            });
+
+            chart.data = chartData;
+            chart.events.on('ready', () => resolve(true));
         });
     }
 
